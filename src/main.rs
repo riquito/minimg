@@ -57,16 +57,15 @@ impl Viewport {
     }
 }
 
-async fn run(event_loop: EventLoop<()>, viewports: Vec<(Window, wgpu::Color)>) {
+async fn run(event_loop: EventLoop<()>, viewport: (Window, wgpu::Color)) {
     let instance = wgpu::Instance::new(wgpu::Backends::all());
-    let viewports: Vec<_> = viewports
-        .into_iter()
-        .map(|(window, color)| ViewportDesc::new(window, color, &instance))
-        .collect();
+
+    let (window, color) = viewport;
+    let desc = ViewportDesc::new(window, color, &instance);
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions {
             // Request an adapter which can render to our surface
-            compatible_surface: viewports.first().map(|desc| &desc.surface),
+            compatible_surface: Some(&desc.surface),
             ..Default::default()
         })
         .await
@@ -85,7 +84,7 @@ async fn run(event_loop: EventLoop<()>, viewports: Vec<(Window, wgpu::Color)>) {
         .await
         .expect("Failed to create device");
 
-    let mut viewports: HashMap<WindowId, Viewport> = viewports
+    let mut viewports: HashMap<WindowId, Viewport> = vec![desc]
         .into_iter()
         .map(|desc| (desc.window.id(), desc.build(&adapter, &device)))
         .collect();
@@ -154,41 +153,30 @@ async fn run(event_loop: EventLoop<()>, viewports: Vec<(Window, wgpu::Color)>) {
 
 fn main() {
     const WINDOW_SIZE: u32 = 128;
-    const WINDOW_PADDING: u32 = 16;
-    const WINDOW_TITLEBAR: u32 = 32;
-    const WINDOW_OFFSET: u32 = WINDOW_SIZE + WINDOW_PADDING;
-    const ROWS: u32 = 2;
-    const COLUMNS: u32 = 2;
 
     let event_loop = EventLoop::new();
-    let mut viewports = Vec::with_capacity((ROWS * COLUMNS) as usize);
-    for row in 0..ROWS {
-        for column in 0..COLUMNS {
-            let window = winit::window::WindowBuilder::new()
-                .with_title(format!("x{}y{}", column, row))
-                .with_inner_size(winit::dpi::PhysicalSize::new(WINDOW_SIZE, WINDOW_SIZE))
-                .build(&event_loop)
-                .unwrap();
-            window.set_outer_position(winit::dpi::PhysicalPosition::new(
-                WINDOW_PADDING + column * WINDOW_OFFSET,
-                WINDOW_PADDING + row * (WINDOW_OFFSET + WINDOW_TITLEBAR),
-            ));
-            fn frac(index: u32, max: u32) -> f64 {
-                index as f64 / max as f64
-            }
-            viewports.push((
-                window,
-                wgpu::Color {
-                    r: frac(row, ROWS),
-                    g: 0.5 - frac(row * column, ROWS * COLUMNS) * 0.5,
-                    b: frac(column, COLUMNS),
-                    a: 1.0,
-                },
-            ))
-        }
+
+    let window = winit::window::WindowBuilder::new()
+        .with_title("minimg")
+        .with_inner_size(winit::dpi::PhysicalSize::new(WINDOW_SIZE, WINDOW_SIZE))
+        .build(&event_loop)
+        .unwrap();
+
+    fn frac(index: u32, max: u32) -> f64 {
+        index as f64 / max as f64
     }
+
+    let viewport = (
+        window,
+        wgpu::Color {
+            r: frac(0, 4),
+            g: 0.5 - frac(0, 16) * 0.5,
+            b: frac(0, 4),
+            a: 1.0,
+        },
+    );
 
     env_logger::init();
     // Temporarily avoid srgb formats for the swapchain on the web
-    pollster::block_on(run(event_loop, viewports));
+    pollster::block_on(run(event_loop, viewport));
 }
