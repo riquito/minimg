@@ -1,8 +1,13 @@
 use anyhow::{anyhow, Result};
 use image::DynamicImage;
+use log::debug;
+use minimg::fs_utils::{start_file_reader, Direction, FileStatus};
 use minimg::window::generate_window;
 use show_image::event;
 use std::path::PathBuf;
+use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::{Arc, Mutex};
+use std::thread::{self, JoinHandle};
 
 struct ImagePair(PathBuf, Option<DynamicImage>);
 
@@ -19,6 +24,7 @@ impl ImagePair {
 struct ImagesBag {
     data: Vec<ImagePair>,
     current: usize,
+    _thread_handle: Option<JoinHandle<()>>,
 }
 impl ImagesBag {
     pub fn new(paths: Vec<PathBuf>) -> Result<Self> {
@@ -29,13 +35,15 @@ impl ImagesBag {
         Ok(ImagesBag {
             data: paths.into_iter().map(|x| ImagePair(x, None)).collect(),
             current: 0,
+            _thread_handle: None,
         })
     }
 
     pub fn preload(&mut self, n: usize) -> Result<()> {
+        let from = 0;
         // load all the images at once! (step 1-bis, make it work...)
         let data: &mut Vec<ImagePair> = self.data.as_mut();
-        for ImagePair(path, wannabe_img) in data.iter_mut().take(n) {
+        for ImagePair(path, wannabe_img) in data.iter_mut().skip(from).take(n) {
             let image = image::open(&path)
                 .map_err(|e| anyhow!("Failed to read image from {:?}: {}", path, e))?;
             *wannabe_img = Some(image);
@@ -45,6 +53,15 @@ impl ImagesBag {
     }
 
     pub fn get(&mut self, idx: usize) -> Option<&ImagePair> {
+        if idx + 5 > self.data.len() {
+            let paths: Vec<(usize, PathBuf)> = self
+                .data
+                .iter()
+                .map(|ip| ip.0.clone())
+                .enumerate()
+                .collect();
+        }
+
         if let Some(image_pair) = self.data.get(idx) {
             self.current = idx;
             return Some(image_pair);
@@ -64,9 +81,65 @@ impl ImagesBag {
     }
 }
 
+struct ImagesBag2 {
+    tx_d: Sender<Direction>,
+    rx_f: Receiver<Result<DynamicImage, String>>,
+    _thread_handle: JoinHandle<()>,
+}
+impl ImagesBag2 {
+    pub fn new(paths: Vec<PathBuf>) -> Result<Self> {
+        if paths.is_empty() {
+            return Err(anyhow!("The list of images to read cannot be empty"));
+        }
+
+        let (tx_f, rx_f) = channel::<Result<DynamicImage, String>>();
+        let (tx_d, rx_d) = channel::<Direction>();
+        let _thread_handle = std::thread::spawn(move || start_file_reader(paths, 0, 5, rx_d, tx_f));
+
+        Ok(ImagesBag2 {
+            tx_d,
+            rx_f,
+            _thread_handle,
+        })
+    }
+
+    pub fn get(&mut self, d: Direction) -> Option<ImagePair> {
+        debug!("Request next image");
+        self.tx_d.send(d).unwrap();
+        debug!("Wait for next image");
+        let maybe_img = self.rx_f.recv().unwrap();
+        debug!("Received next image");
+
+        if let Ok(image) = maybe_img {
+            debug!("Start building ImagePair");
+
+            let x = Some(ImagePair(PathBuf::from("/"), Some(image)));
+
+            debug!("Done building ImagePair");
+            return x;
+        }
+
+        None
+    }
+
+    pub fn next(&mut self) -> Option<ImagePair> {
+        self.get(Direction::Right)
+    }
+
+    pub fn prev(&mut self) -> Option<ImagePair> {
+        self.get(Direction::Left)
+    }
+
+    pub fn current(&mut self) -> Option<ImagePair> {
+        self.get(Direction::Stay)
+    }
+}
+
 #[show_image::main]
 fn main() -> Result<()> {
-    env_logger::init();
+    env_logger::Builder::from_default_env()
+        .format_timestamp_millis()
+        .init();
 
     let args: Vec<_> = std::env::args().collect();
     if args.len() != 2 {
@@ -98,9 +171,9 @@ fn main() -> Result<()> {
         ));
     }
 
-    let mut images_bag = ImagesBag::new(paths)?;
-    images_bag.preload(10)?;
-    let first_image_pair = images_bag.next().unwrap(); // there is at least one image
+    let mut images_bag = ImagesBag2::new(paths)?;
+    // images_bag.preload(10)?;
+    let first_image_pair = images_bag.current().unwrap(); // there is at least one image
 
     let window = generate_window()?;
 
