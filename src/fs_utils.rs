@@ -172,32 +172,20 @@ pub fn suggested_items_to_cache(
     len: usize,
     cache_side_max_length: usize,
 ) -> std::ops::Range<usize> {
-    // invariant. If the len is less than twice the cache side, we can return
-    // it as the region to cache
     if len < cache_side_max_length * 2 {
-        return 0..len;
+        // ff the len is less than twice the cache side, we can return
+        // it as the region to cache
+        0..len
+    } else if idx + cache_side_max_length > len - 1 {
+        // ask too much on right side
+        idx - cache_side_max_length - (cache_side_max_length - (len - 1 - idx))..len
+    } else if cache_side_max_length > idx {
+        // ask too much on left side
+        0..cache_side_max_length + 1 + cache_side_max_length
+    } else {
+        // contained
+        idx - cache_side_max_length..idx + cache_side_max_length + 1
     }
-
-    let (l_idx, l_remainder) = if cache_side_max_length > idx {
-        // we don't have enough items on the left side
-        (0, cache_side_max_length - idx)
-    } else {
-        (idx - cache_side_max_length, 0)
-    };
-
-    let (r_idx, r_remainder) = if idx + cache_side_max_length > len {
-        (len, len - idx)
-    } else {
-        (idx + cache_side_max_length, 0)
-    };
-
-    // if len was greater than twice the side cache, we can't have two remainders
-    assert!(
-        !(l_remainder > 0 && r_remainder > 0),
-        "Invariant failure, there should be no remainder on both sides"
-    );
-
-    (l_idx - r_remainder)..(r_idx + l_remainder + 1)
 }
 
 #[cfg(test)]
@@ -217,7 +205,8 @@ mod tests {
         assert_eq!(0..5, suggested_items_to_cache(1, len, side_cache_length));
         assert_eq!(0..5, suggested_items_to_cache(2, len, side_cache_length));
         assert_eq!(1..6, suggested_items_to_cache(3, len, side_cache_length));
-        assert_eq!(2..7, suggested_items_to_cache(4, len, side_cache_length));
-        assert_eq!(2..7, suggested_items_to_cache(5, len, side_cache_length));
+        assert_eq!(1..6, suggested_items_to_cache(4, len, side_cache_length));
+        assert_eq!(1..6, suggested_items_to_cache(5, len, side_cache_length));
+        assert_eq!(3..14, suggested_items_to_cache(9, 14, 5));
     }
 }
