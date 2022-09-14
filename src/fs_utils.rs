@@ -4,6 +4,7 @@ use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
+use std::time::Duration;
 use threadpool::ThreadPool;
 
 use std::sync::mpsc::channel;
@@ -109,9 +110,11 @@ pub fn start_file_reader(
             //let maybe_image_bytes = read_to_end(&paths[idx]);
             let maybe_image = image::open(&paths[start_idx]);
             cache.write().unwrap()[idx] = FileStatus::from(maybe_image);
+        } else {
+            while cache.read().unwrap()[idx] == FileStatus::Reading {
+                std::thread::sleep(Duration::from_millis(20));
+            }
         }
-
-        // XXX TODO it panicks iff FileStatus was ::READING
 
         {
             // now the file is either Read or Err
