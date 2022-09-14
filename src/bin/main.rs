@@ -22,71 +22,11 @@ impl ImagePair {
 }
 
 struct ImagesBag {
-    data: Vec<ImagePair>,
-    current: usize,
-    _thread_handle: Option<JoinHandle<()>>,
-}
-impl ImagesBag {
-    pub fn new(paths: Vec<PathBuf>) -> Result<Self> {
-        if paths.is_empty() {
-            return Err(anyhow!("The list of images to read cannot be empty"));
-        }
-
-        Ok(ImagesBag {
-            data: paths.into_iter().map(|x| ImagePair(x, None)).collect(),
-            current: 0,
-            _thread_handle: None,
-        })
-    }
-
-    pub fn preload(&mut self, n: usize) -> Result<()> {
-        let from = 0;
-        // load all the images at once! (step 1-bis, make it work...)
-        let data: &mut Vec<ImagePair> = self.data.as_mut();
-        for ImagePair(path, wannabe_img) in data.iter_mut().skip(from).take(n) {
-            let image = image::open(&path)
-                .map_err(|e| anyhow!("Failed to read image from {:?}: {}", path, e))?;
-            *wannabe_img = Some(image);
-        }
-
-        Ok(())
-    }
-
-    pub fn get(&mut self, idx: usize) -> Option<&ImagePair> {
-        if idx + 5 > self.data.len() {
-            let paths: Vec<(usize, PathBuf)> = self
-                .data
-                .iter()
-                .map(|ip| ip.0.clone())
-                .enumerate()
-                .collect();
-        }
-
-        if let Some(image_pair) = self.data.get(idx) {
-            self.current = idx;
-            return Some(image_pair);
-        }
-        None
-    }
-
-    pub fn next(&mut self) -> Option<&ImagePair> {
-        self.get(self.current + 1)
-    }
-
-    pub fn prev(&mut self) -> Option<&ImagePair> {
-        if self.current == 0 {
-            return None;
-        }
-        self.get(self.current - 1)
-    }
-}
-
-struct ImagesBag2 {
     tx_d: Sender<Direction>,
     rx_f: Receiver<Result<DynamicImage, String>>,
     _thread_handle: JoinHandle<()>,
 }
-impl ImagesBag2 {
+impl ImagesBag {
     pub fn new(paths: Vec<PathBuf>) -> Result<Self> {
         if paths.is_empty() {
             return Err(anyhow!("The list of images to read cannot be empty"));
@@ -96,7 +36,7 @@ impl ImagesBag2 {
         let (tx_d, rx_d) = channel::<Direction>();
         let _thread_handle = std::thread::spawn(move || start_file_reader(paths, 0, 5, rx_d, tx_f));
 
-        Ok(ImagesBag2 {
+        Ok(ImagesBag {
             tx_d,
             rx_f,
             _thread_handle,
@@ -142,37 +82,36 @@ fn main() -> Result<()> {
         .init();
 
     let args: Vec<_> = std::env::args().collect();
-    if args.len() != 2 {
-        return Err(anyhow!("usage: {} IMAGE", args[0]));
+    if args.len() < 2 {
+        return Err(anyhow!("usage: {} [IMAGE or DIR]...", args[0]));
     }
 
-    let arg_path = std::path::Path::new(&args[1]);
-
     let mut paths = Vec::new();
-    if arg_path.is_file() {
-        paths.push(arg_path.canonicalize()?)
-    } else if arg_path.is_dir() {
-        for entry in arg_path
-            .read_dir()?
-            .filter_map(|x| x.ok())
-            .filter(|e| e.path().is_file())
-        {
-            let path = entry.path();
-            if let Ok(_) = image::ImageFormat::from_path(&path) {
-                paths.push(path);
+
+    for file_or_dir in args.iter().skip(1) {
+        let arg_path = std::path::Path::new(file_or_dir);
+
+        if arg_path.is_file() {
+            paths.push(arg_path.canonicalize()?)
+        } else if arg_path.is_dir() {
+            for entry in arg_path
+                .read_dir()?
+                .filter_map(|x| x.ok())
+                .filter(|e| e.path().is_file())
+            {
+                let path = entry.path();
+                if let Ok(_) = image::ImageFormat::from_path(&path) {
+                    paths.push(path);
+                }
             }
         }
     }
 
     if paths.is_empty() {
-        return Err(anyhow!(
-            "Could not find images in the provided directory: {}",
-            arg_path.display()
-        ));
+        return Err(anyhow!("Could not find any image"));
     }
 
-    let mut images_bag = ImagesBag2::new(paths)?;
-    // images_bag.preload(10)?;
+    let mut images_bag = ImagesBag::new(paths)?;
     let first_image_pair = images_bag.current().unwrap(); // there is at least one image
 
     let window = generate_window()?;
