@@ -22,6 +22,7 @@ pub enum Direction {
     Left,
     Right,
     Stay,
+    Exit,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -95,6 +96,7 @@ pub fn start_file_reader(
             Direction::Left => idx,
             Direction::Right if idx < paths.len() - 1 => idx + 1,
             Direction::Right => idx,
+            Direction::Exit => break,
         };
 
         debug!("Got a request to load idx {}", idx);

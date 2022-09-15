@@ -72,6 +72,11 @@ impl ImagesBag {
     pub fn current(&mut self) -> Option<ImagePair> {
         self.get(Direction::Stay)
     }
+
+    pub fn stop(self) -> Result<(), Box<dyn std::any::Any + Send>> {
+        self.tx_d.send(Direction::Exit).unwrap();
+        self._thread_handle.join()
+    }
 }
 
 #[show_image::main]
@@ -151,6 +156,10 @@ fn main() -> Result<()> {
             }
         }
     }
+
+    images_bag
+        .stop()
+        .expect("Could not stop cleanly the image's loader thread");
 
     Ok(())
 }
