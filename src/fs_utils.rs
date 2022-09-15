@@ -67,7 +67,7 @@ pub fn start_file_reader(
     start_idx: usize,
     cache_side_max_length: usize,
     rx: std::sync::mpsc::Receiver<Direction>,
-    tx: std::sync::mpsc::Sender<Result<DynamicImage, String>>,
+    tx: std::sync::mpsc::Sender<Result<Option<DynamicImage>, String>>,
 ) {
     // TODO let's start by storing every loaded image, we'll later find a way
     // to drop some of them
@@ -93,9 +93,11 @@ pub fn start_file_reader(
         idx = match rx.recv().unwrap() {
             Direction::Stay => idx,
             Direction::Left if idx > 0 => idx - 1,
-            Direction::Left => idx,
             Direction::Right if idx < paths.len() - 1 => idx + 1,
-            Direction::Right => idx,
+            Direction::Left | Direction::Right => {
+                tx.send(Ok(None)).unwrap();
+                continue;
+            }
             Direction::Exit => break,
         };
 
@@ -123,7 +125,7 @@ pub fn start_file_reader(
                 debug!("I have the file, cloning");
                 let some_clone = v.clone();
                 debug!("Cloned. Sending it back to main thread");
-                tx.send(Ok(some_clone)).unwrap();
+                tx.send(Ok(Some(some_clone))).unwrap();
             } else if let FileStatus::Err(e) = &c[idx] {
                 tx.send(Err(e.to_string())).unwrap();
             } else {

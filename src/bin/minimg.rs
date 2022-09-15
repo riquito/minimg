@@ -22,7 +22,7 @@ impl ImagePair {
 
 struct ImagesBag {
     tx_d: Sender<Direction>,
-    rx_f: Receiver<Result<DynamicImage, String>>,
+    rx_f: Receiver<Result<Option<DynamicImage>, String>>,
     _thread_handle: JoinHandle<()>,
 }
 impl ImagesBag {
@@ -31,7 +31,7 @@ impl ImagesBag {
             return Err(anyhow!("The list of images to read cannot be empty"));
         }
 
-        let (tx_f, rx_f) = channel::<Result<DynamicImage, String>>();
+        let (tx_f, rx_f) = channel::<Result<Option<DynamicImage>, String>>();
         let (tx_d, rx_d) = channel::<Direction>();
         let _thread_handle = std::thread::spawn(move || start_file_reader(paths, 0, 5, rx_d, tx_f));
 
@@ -49,7 +49,7 @@ impl ImagesBag {
         let maybe_img = self.rx_f.recv().unwrap();
         debug!("Received next image");
 
-        if let Ok(image) = maybe_img {
+        if let Ok(Some(image)) = maybe_img {
             debug!("Start building ImagePair");
 
             let x = Some(ImagePair(PathBuf::from("/"), Some(image)));
@@ -57,6 +57,8 @@ impl ImagesBag {
             debug!("Done building ImagePair");
             return x;
         }
+
+        // TODO handle error
 
         None
     }
