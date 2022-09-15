@@ -145,6 +145,11 @@ fn main() -> Result<()> {
                 if let Some(image_pair) = images_bag.prev() {
                     window.set_image(&image_pair.path_str(), image_pair.image_clone().unwrap())?;
                 }
+            } else if !event.is_synthetic
+                && event.input.key_code == Some(event::VirtualKeyCode::Key0)
+                && event.input.state.is_pressed()
+            {
+                window.reset_image();
             }
         }
     }
