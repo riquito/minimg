@@ -124,31 +124,30 @@ fn main() -> Result<()> {
     // Wait for the window to be closed or Escape to be pressed.
     for event in window.event_channel()? {
         if let event::WindowEvent::KeyboardInput(event) = event {
-            if !event.is_synthetic
-                && event.input.key_code == Some(event::VirtualKeyCode::Escape)
-                && event.input.state.is_pressed()
-            {
-                println!("Escape pressed!");
-                break;
-            } else if !event.is_synthetic
-                && event.input.key_code == Some(event::VirtualKeyCode::Right)
-                && event.input.state.is_pressed()
-            {
-                if let Some(image_pair) = images_bag.next() {
-                    window.set_image(&image_pair.path_str(), image_pair.image_clone().unwrap())?;
+            if !event.is_synthetic && event.input.state.is_pressed() {
+                match event.input.key_code {
+                    Some(event::VirtualKeyCode::Escape) => break,
+                    Some(event::VirtualKeyCode::Right) => {
+                        if let Some(image_pair) = images_bag.next() {
+                            window.set_image(
+                                &image_pair.path_str(),
+                                image_pair.image_clone().unwrap(),
+                            )?;
+                        }
+                    }
+                    Some(event::VirtualKeyCode::Left) => {
+                        if let Some(image_pair) = images_bag.prev() {
+                            window.set_image(
+                                &image_pair.path_str(),
+                                image_pair.image_clone().unwrap(),
+                            )?;
+                        }
+                    }
+                    Some(event::VirtualKeyCode::Key0) => {
+                        window.reset_image();
+                    }
+                    _ => (),
                 }
-            } else if !event.is_synthetic
-                && event.input.key_code == Some(event::VirtualKeyCode::Left)
-                && event.input.state.is_pressed()
-            {
-                if let Some(image_pair) = images_bag.prev() {
-                    window.set_image(&image_pair.path_str(), image_pair.image_clone().unwrap())?;
-                }
-            } else if !event.is_synthetic
-                && event.input.key_code == Some(event::VirtualKeyCode::Key0)
-                && event.input.state.is_pressed()
-            {
-                window.reset_image();
             }
         }
     }
