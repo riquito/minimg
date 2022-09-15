@@ -1,13 +1,12 @@
 use anyhow::{anyhow, Result};
 use image::DynamicImage;
 use log::debug;
-use minimg::fs_utils::{start_file_reader, Direction, FileStatus};
+use minimg::fs_utils::{start_file_reader, Direction};
 use minimg::window::generate_window;
 use show_image::event;
 use std::path::PathBuf;
 use std::sync::mpsc::{channel, Receiver, Sender};
-use std::sync::{Arc, Mutex};
-use std::thread::{self, JoinHandle};
+use std::thread::JoinHandle;
 
 struct ImagePair(PathBuf, Option<DynamicImage>);
 
@@ -100,7 +99,7 @@ fn main() -> Result<()> {
                 .filter(|e| e.path().is_file())
             {
                 let path = entry.path();
-                if let Ok(_) = image::ImageFormat::from_path(&path) {
+                if image::ImageFormat::from_path(&path).is_ok() {
                     paths.push(path);
                 }
             }

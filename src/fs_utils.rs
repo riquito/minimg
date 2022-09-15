@@ -7,8 +7,6 @@ use std::sync::{Arc, RwLock};
 use std::time::Duration;
 use threadpool::ThreadPool;
 
-use std::sync::mpsc::channel;
-
 pub fn read_image(path: impl AsRef<Path>) -> std::io::Result<Vec<u8>> {
     let mut buffer = Vec::new();
     {
