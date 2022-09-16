@@ -161,6 +161,16 @@ fn main() -> Result<()> {
                     Some(event::VirtualKeyCode::Key0) => {
                         window.reset_image();
                     }
+                    Some(event::VirtualKeyCode::Minus)
+                        if event.input.modifiers == event::ModifiersState::CTRL =>
+                    {
+                        window.scale_down();
+                    }
+                    Some(event::VirtualKeyCode::Equals)
+                        if event.input.modifiers == event::ModifiersState::CTRL =>
+                    {
+                        window.scale_up();
+                    }
                     _ => (),
                 }
             }

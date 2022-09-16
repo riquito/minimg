@@ -37,6 +37,63 @@ impl Window {
             })
             .expect("XXX TODO reset_scale failed");
     }
+
+    pub fn scale_down(&self) {
+        self.window
+            .run_function_wait(|mut window_handle| {
+                let transform = window_handle.transform();
+                let scale_x = transform.x_axis.length();
+
+                // TODO should use a curve, maybe exp, to smooth it out
+
+                // never reach 0
+                let scale = if scale_x > 1.0 {
+                    scale_x / 1.25
+                } else if scale_x > 0.2 {
+                    scale_x - 0.1
+                } else {
+                    scale_x
+                };
+
+                let origin = glam::Vec2::splat((1.0 - scale) / 2.0);
+
+                let transform = glam::Affine2::from_scale_angle_translation(
+                    glam::Vec2::splat(scale),
+                    0.0,
+                    origin,
+                );
+
+                window_handle.set_transform(transform);
+            })
+            .expect("XXX TODO reset_scale failed");
+    }
+
+    pub fn scale_up(&self) {
+        self.window
+            .run_function_wait(|mut window_handle| {
+                let transform = window_handle.transform();
+                let scale_x = transform.x_axis.length();
+
+                let scale = if scale_x < 1.0 {
+                    scale_x + 0.1
+                } else if scale_x < 4.0 {
+                    scale_x * 1.25
+                } else {
+                    scale_x
+                };
+
+                let origin = glam::Vec2::splat((1.0 - scale) / 2.0);
+
+                let transform = glam::Affine2::from_scale_angle_translation(
+                    glam::Vec2::splat(scale),
+                    0.0,
+                    origin,
+                );
+
+                window_handle.set_transform(transform);
+            })
+            .expect("XXX TODO reset_scale failed");
+    }
 }
 
 pub fn generate_window() -> Result<Window> {
