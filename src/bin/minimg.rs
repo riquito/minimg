@@ -122,7 +122,9 @@ fn main() -> Result<()> {
             if !event.is_synthetic && event.input.state.is_pressed() {
                 match event.input.key_code {
                     Some(event::VirtualKeyCode::Escape) | Some(event::VirtualKeyCode::Q) => break,
-                    Some(event::VirtualKeyCode::Right) => {
+                    Some(event::VirtualKeyCode::Right)
+                    | Some(event::VirtualKeyCode::L)
+                    | Some(event::VirtualKeyCode::N) => {
                         if let Some(image_pair) = images_bag.get(Direction::Right) {
                             window.set_image(
                                 &image_pair.path_str(),
@@ -130,7 +132,9 @@ fn main() -> Result<()> {
                             )?;
                         }
                     }
-                    Some(event::VirtualKeyCode::Left) => {
+                    Some(event::VirtualKeyCode::Left)
+                    | Some(event::VirtualKeyCode::H)
+                    | Some(event::VirtualKeyCode::P) => {
                         if let Some(image_pair) = images_bag.get(Direction::Left) {
                             window.set_image(
                                 &image_pair.path_str(),
