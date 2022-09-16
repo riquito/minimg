@@ -22,6 +22,8 @@ pub enum Direction {
     Left,
     Right,
     Stay,
+    First,
+    Last,
     Exit,
 }
 
@@ -94,6 +96,8 @@ pub fn start_file_reader(
             Direction::Stay => idx,
             Direction::Left if idx > 0 => idx - 1,
             Direction::Right if idx < paths.len() - 1 => idx + 1,
+            Direction::First => 0,
+            Direction::Last => paths.len() - 1,
             Direction::Left | Direction::Right => {
                 tx.send(Ok(None)).unwrap();
                 continue;

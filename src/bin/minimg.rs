@@ -138,6 +138,22 @@ fn main() -> Result<()> {
                             )?;
                         }
                     }
+                    Some(event::VirtualKeyCode::Home) => {
+                        if let Some(image_pair) = images_bag.get(Direction::First) {
+                            window.set_image(
+                                &image_pair.path_str(),
+                                image_pair.image_clone().unwrap(),
+                            )?;
+                        }
+                    }
+                    Some(event::VirtualKeyCode::End) => {
+                        if let Some(image_pair) = images_bag.get(Direction::Last) {
+                            window.set_image(
+                                &image_pair.path_str(),
+                                image_pair.image_clone().unwrap(),
+                            )?;
+                        }
+                    }
                     Some(event::VirtualKeyCode::Key0) => {
                         window.reset_image();
                     }
