@@ -63,18 +63,6 @@ impl ImagesBag {
         None
     }
 
-    pub fn next(&mut self) -> Option<ImagePair> {
-        self.get(Direction::Right)
-    }
-
-    pub fn prev(&mut self) -> Option<ImagePair> {
-        self.get(Direction::Left)
-    }
-
-    pub fn current(&mut self) -> Option<ImagePair> {
-        self.get(Direction::Stay)
-    }
-
     pub fn stop(self) -> Result<(), Box<dyn std::any::Any + Send>> {
         self.tx_d.send(Direction::Exit).unwrap();
         self._thread_handle.join()
@@ -118,7 +106,7 @@ fn main() -> Result<()> {
     }
 
     let mut images_bag = ImagesBag::new(paths)?;
-    let first_image_pair = images_bag.current().unwrap(); // there is at least one image
+    let first_image_pair = images_bag.get(Direction::Stay).unwrap(); // there is at least one image
 
     let window = generate_window()?;
 
@@ -135,7 +123,7 @@ fn main() -> Result<()> {
                 match event.input.key_code {
                     Some(event::VirtualKeyCode::Escape) => break,
                     Some(event::VirtualKeyCode::Right) => {
-                        if let Some(image_pair) = images_bag.next() {
+                        if let Some(image_pair) = images_bag.get(Direction::Right) {
                             window.set_image(
                                 &image_pair.path_str(),
                                 image_pair.image_clone().unwrap(),
@@ -143,7 +131,7 @@ fn main() -> Result<()> {
                         }
                     }
                     Some(event::VirtualKeyCode::Left) => {
-                        if let Some(image_pair) = images_bag.prev() {
+                        if let Some(image_pair) = images_bag.get(Direction::Left) {
                             window.set_image(
                                 &image_pair.path_str(),
                                 image_pair.image_clone().unwrap(),
