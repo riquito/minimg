@@ -121,7 +121,7 @@ fn main() -> Result<()> {
         if let event::WindowEvent::KeyboardInput(event) = event {
             if !event.is_synthetic && event.input.state.is_pressed() {
                 match event.input.key_code {
-                    Some(event::VirtualKeyCode::Escape) => break,
+                    Some(event::VirtualKeyCode::Escape) | Some(event::VirtualKeyCode::Q) => break,
                     Some(event::VirtualKeyCode::Right) => {
                         if let Some(image_pair) = images_bag.get(Direction::Right) {
                             window.set_image(
