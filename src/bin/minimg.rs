@@ -124,7 +124,8 @@ fn main() -> Result<()> {
                     Some(event::VirtualKeyCode::Escape) | Some(event::VirtualKeyCode::Q) => break,
                     Some(event::VirtualKeyCode::Right)
                     | Some(event::VirtualKeyCode::L)
-                    | Some(event::VirtualKeyCode::N) => {
+                    | Some(event::VirtualKeyCode::N)
+                    | Some(event::VirtualKeyCode::Space) => {
                         if let Some(image_pair) = images_bag.get(Direction::Right) {
                             window.set_image(
                                 &image_pair.path_str(),
@@ -134,7 +135,8 @@ fn main() -> Result<()> {
                     }
                     Some(event::VirtualKeyCode::Left)
                     | Some(event::VirtualKeyCode::H)
-                    | Some(event::VirtualKeyCode::P) => {
+                    | Some(event::VirtualKeyCode::P)
+                    | Some(event::VirtualKeyCode::Back) => {
                         if let Some(image_pair) = images_bag.get(Direction::Left) {
                             window.set_image(
                                 &image_pair.path_str(),
