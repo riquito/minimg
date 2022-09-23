@@ -6,6 +6,29 @@ pub struct Window {
     window: show_image::WindowProxy,
 }
 
+pub enum Rotation {
+    Right,
+    Left,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum RotationState {
+    UP,
+    RIGHT,
+    DOWN,
+    LEFT,
+}
+impl RotationState {
+    fn clockwise(&self) -> RotationState {
+        match self {
+            RotationState::UP => RotationState::RIGHT,
+            RotationState::RIGHT => RotationState::DOWN,
+            RotationState::DOWN => RotationState::LEFT,
+            RotationState::LEFT => RotationState::UP,
+        }
+    }
+}
+
 impl Window {
     pub fn set_image(&self, name: &str, image: DynamicImage) -> Result<()> {
         self.window
@@ -94,6 +117,63 @@ impl Window {
             })
             .expect("XXX TODO reset_scale failed");
     }
+    pub fn rotate(&self, direction: Rotation) {
+        self.window
+            .run_function_wait(move |mut window_handle| {
+                let cur_transform = window_handle.transform();
+
+                // x-axis y-axis (assuming we rotate clockwise)
+                //  1/ 0  0/ 1   # ⮝
+                //  0/ 1 -1/ 0   # ⮞
+                // -1/ 0  0/-1   # ⮟
+                //  0/-1  1/ 0   # ⮜
+                // As usual with floats, they're hard to compare for equality
+
+                // (if I could remember more of algebra, I wouldn't need to detect the current rotation... )
+                let r_state = match cur_transform.matrix2.to_cols_array() {
+                    k if k[0] > k[1] && k[2] < k[3] => RotationState::UP,
+                    k if k[0] < k[1] && k[2] < k[3] => RotationState::RIGHT,
+                    k if k[0] < k[1] && k[2] > k[3] => RotationState::DOWN,
+                    k if k[0] > k[1] && k[2] > k[3] => RotationState::LEFT,
+                    _ => RotationState::UP,
+                };
+
+                let r_state = r_state.clockwise();
+
+                let angle = std::f32::consts::PI / 2.0
+                    * match r_state {
+                        RotationState::UP => 0.0,
+                        RotationState::RIGHT => 1.0,
+                        RotationState::DOWN => 2.0,
+                        RotationState::LEFT => 3.0,
+                    };
+
+                let rotate = glam::Affine2::from_angle(angle);
+
+                let image_size = window_handle.image_info().unwrap().size.as_vec2();
+                let mut inner_size = window_handle.inner_size().as_vec2();
+
+                // is it going to be rotated 90 or 180 degree? Invert x with y
+                if r_state == RotationState::RIGHT || r_state == RotationState::LEFT {
+                    inner_size = glam::Vec2::new(inner_size.y, inner_size.x);
+                }
+
+                let (fit_transform, _) = fit(inner_size, image_size);
+
+                let position =
+                    glam::Affine2::from_translation(glam::Vec2::from_slice(match r_state {
+                        RotationState::UP => &[0.0, 0.0],
+                        RotationState::RIGHT => &[1.0, 0.0],
+                        RotationState::DOWN => &[1.0, 1.0],
+                        RotationState::LEFT => &[0.0, 1.0],
+                    }));
+
+                window_handle.set_transform(position * rotate * fit_transform);
+            })
+            .expect("XXX TODO rotate failed");
+    }
+
+    pub fn exit(&self) {}
 }
 
 pub fn generate_window() -> Result<Window> {
@@ -106,4 +186,26 @@ pub fn generate_window() -> Result<Window> {
     )?;
 
     Ok(Window { window })
+}
+
+fn fit(window_size: glam::Vec2, image_size: glam::Vec2) -> (glam::Affine2, glam::Vec2) {
+    let ratios = image_size / window_size;
+
+    let w;
+    let h;
+    if ratios.x >= ratios.y {
+        w = 1.0;
+        h = ratios.y / ratios.x;
+    } else {
+        w = ratios.x / ratios.y;
+        h = 1.0;
+    }
+
+    let transform = glam::Affine2::from_scale_angle_translation(
+        glam::Vec2::new(w, h),
+        0.0,
+        0.5 * glam::Vec2::new(1.0 - w, 1.0 - h),
+    );
+
+    (transform, image_size)
 }

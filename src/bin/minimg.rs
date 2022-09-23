@@ -2,7 +2,7 @@ use anyhow::{anyhow, Result};
 use image::DynamicImage;
 use log::debug;
 use minimg::fs_utils::{start_file_reader, Direction};
-use minimg::window::generate_window;
+use minimg::window::{generate_window, Rotation};
 use show_image::event;
 use std::path::PathBuf;
 use std::sync::mpsc::{channel, Receiver, Sender};
@@ -172,6 +172,14 @@ fn main() -> Result<()> {
                         if event.input.modifiers == event::ModifiersState::CTRL =>
                     {
                         window.scale_up();
+                    }
+                    Some(event::VirtualKeyCode::R)
+                        if event.input.modifiers == event::ModifiersState::SHIFT =>
+                    {
+                        window.rotate(Rotation::Left);
+                    }
+                    Some(event::VirtualKeyCode::R) => {
+                        window.rotate(Rotation::Right);
                     }
                     _ => (),
                 }
