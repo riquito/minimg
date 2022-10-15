@@ -120,6 +120,7 @@ impl Window {
     pub fn rotate(&self, direction: Rotation) {
         self.window
             .run_function_wait(move |mut window_handle| {
+                window_handle.set_preserve_aspect_ratio(false);
                 let cur_transform = window_handle.transform();
 
                 // x-axis y-axis (assuming we rotate clockwise)
