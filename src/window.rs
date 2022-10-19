@@ -27,6 +27,22 @@ impl RotationState {
             RotationState::LEFT => RotationState::UP,
         }
     }
+
+    fn counter_clockwise(&self) -> RotationState {
+        match self {
+            RotationState::UP => RotationState::LEFT,
+            RotationState::RIGHT => RotationState::UP,
+            RotationState::DOWN => RotationState::RIGHT,
+            RotationState::LEFT => RotationState::DOWN,
+        }
+    }
+
+    fn rotate(&self, direction: Rotation) -> RotationState {
+        match direction {
+            Rotation::Right => self.clockwise(),
+            Rotation::Left => self.counter_clockwise(),
+        }
+    }
 }
 
 impl Window {
@@ -139,7 +155,7 @@ impl Window {
                     _ => RotationState::UP,
                 };
 
-                let r_state = r_state.clockwise();
+                let r_state = r_state.rotate(direction);
 
                 let angle = std::f32::consts::PI / 2.0
                     * match r_state {
