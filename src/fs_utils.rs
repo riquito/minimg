@@ -181,8 +181,8 @@ pub fn suggested_items_to_cache(
     len: usize,
     cache_side_max_length: usize,
 ) -> std::ops::Range<usize> {
-    if len < cache_side_max_length * 2 {
-        // ff the len is less than twice the cache side, we can return
+    if len <= cache_side_max_length * 2 {
+        // if the len is less than twice the cache side, we can return
         // it as the region to cache
         0..len
     } else if idx + cache_side_max_length > len - 1 {
@@ -207,7 +207,7 @@ mod tests {
         let side_cache_length = 2;
 
         // 0123456
-        // x-|--x- e.g. if idx (|) is 2, we expect bounds (x) to be [0, 5)
+        // x-|--x- e.g. if idx (|) is 2 and len is 2, we expect bounds (x) to be [0, 5)
 
         assert_eq!(0..1, suggested_items_to_cache(0, 1, side_cache_length));
         assert_eq!(0..5, suggested_items_to_cache(0, len, side_cache_length));
@@ -217,5 +217,6 @@ mod tests {
         assert_eq!(1..6, suggested_items_to_cache(4, len, side_cache_length));
         assert_eq!(1..6, suggested_items_to_cache(5, len, side_cache_length));
         assert_eq!(3..14, suggested_items_to_cache(9, 14, 5));
+        assert_eq!(0..10, suggested_items_to_cache(0, 10, 5));
     }
 }
