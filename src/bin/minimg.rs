@@ -1,29 +1,18 @@
 use anyhow::{anyhow, Result};
-use image::DynamicImage;
 use log::debug;
-use minimg::fs_utils::{start_file_reader, Direction};
+use minimg::fs_utils::{start_file_reader, Direction, FileStatus, ImagePair};
 use minimg::window::{generate_window, Rotation};
 use show_image::event;
 use std::path::PathBuf;
 use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::{Arc, RwLock};
 use std::thread::JoinHandle;
-
-struct ImagePair(PathBuf, Option<DynamicImage>);
-
-impl ImagePair {
-    fn path_str(&self) -> std::borrow::Cow<str> {
-        self.0.to_string_lossy()
-    }
-
-    fn image_clone(&self) -> Option<DynamicImage> {
-        self.1.clone()
-    }
-}
 
 struct ImagesBag {
     tx_d: Sender<Direction>,
-    rx_f: Receiver<Result<Option<DynamicImage>, String>>,
+    rx_f: Receiver<Result<Option<usize>, String>>,
     _thread_handle: JoinHandle<()>,
+    _cache: Arc<RwLock<Vec<FileStatus<ImagePair>>>>,
 }
 impl ImagesBag {
     pub fn new(paths: Vec<PathBuf>) -> Result<Self> {
@@ -31,14 +20,21 @@ impl ImagesBag {
             return Err(anyhow!("The list of images to read cannot be empty"));
         }
 
-        let (tx_f, rx_f) = channel::<Result<Option<DynamicImage>, String>>();
+        let (tx_f, rx_f) = channel::<Result<Option<usize>, String>>();
         let (tx_d, rx_d) = channel::<Direction>();
-        let _thread_handle = std::thread::spawn(move || start_file_reader(paths, 0, 5, rx_d, tx_f));
+
+        let cache: Arc<RwLock<Vec<FileStatus<ImagePair>>>> =
+            Arc::new(RwLock::new(vec![FileStatus::Unread; paths.len()]));
+        let _cache = cache.clone();
+
+        let _thread_handle =
+            std::thread::spawn(move || start_file_reader(cache, paths, 0, 5, rx_d, tx_f));
 
         Ok(ImagesBag {
             tx_d,
             rx_f,
             _thread_handle,
+            _cache,
         })
     }
 
@@ -47,15 +43,15 @@ impl ImagesBag {
         self.tx_d.send(d).unwrap();
         debug!("Wait for next image");
         let maybe_img = self.rx_f.recv().unwrap();
-        debug!("Received next image");
+        debug!("Received next image_pair idx");
 
-        if let Ok(Some(image)) = maybe_img {
-            debug!("Start building ImagePair");
+        if let Ok(Some(idx)) = maybe_img {
+            debug!("Search for image_pair at idx");
 
-            let x = Some(ImagePair(PathBuf::from("/"), Some(image)));
-
-            debug!("Done building ImagePair");
-            return x;
+            if let Some(FileStatus::Read(image_pair)) = self._cache.read().unwrap().get(idx) {
+                debug!("Got imagPair");
+                return Some(image_pair.clone());
+            }
         }
 
         // TODO handle error
@@ -111,10 +107,7 @@ fn main() -> Result<()> {
     let window = generate_window()?;
 
     // let's start by displaying something
-    window.set_image(
-        &first_image_pair.path_str(),
-        first_image_pair.image_clone().unwrap(),
-    )?;
+    window.set_image(first_image_pair)?;
 
     // Wait for the window to be closed or Escape to be pressed.
     for event in window.event_channel()? {
@@ -127,10 +120,7 @@ fn main() -> Result<()> {
                     | Some(event::VirtualKeyCode::N)
                     | Some(event::VirtualKeyCode::Space) => {
                         if let Some(image_pair) = images_bag.get(Direction::Right) {
-                            window.set_image(
-                                &image_pair.path_str(),
-                                image_pair.image_clone().unwrap(),
-                            )?;
+                            window.set_image(image_pair)?;
                         }
                     }
                     Some(event::VirtualKeyCode::Left)
@@ -138,26 +128,17 @@ fn main() -> Result<()> {
                     | Some(event::VirtualKeyCode::P)
                     | Some(event::VirtualKeyCode::Back) => {
                         if let Some(image_pair) = images_bag.get(Direction::Left) {
-                            window.set_image(
-                                &image_pair.path_str(),
-                                image_pair.image_clone().unwrap(),
-                            )?;
+                            window.set_image(image_pair)?;
                         }
                     }
                     Some(event::VirtualKeyCode::Home) => {
                         if let Some(image_pair) = images_bag.get(Direction::First) {
-                            window.set_image(
-                                &image_pair.path_str(),
-                                image_pair.image_clone().unwrap(),
-                            )?;
+                            window.set_image(image_pair)?;
                         }
                     }
                     Some(event::VirtualKeyCode::End) => {
                         if let Some(image_pair) = images_bag.get(Direction::Last) {
-                            window.set_image(
-                                &image_pair.path_str(),
-                                image_pair.image_clone().unwrap(),
-                            )?;
+                            window.set_image(image_pair)?;
                         }
                     }
                     Some(event::VirtualKeyCode::Key0) => {

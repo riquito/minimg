@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Result};
-use image::DynamicImage;
 use show_image::glam;
+
+use crate::fs_utils::ImagePair;
 
 pub struct Window {
     window: show_image::WindowProxy,
@@ -11,7 +12,7 @@ pub enum Rotation {
     Left,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum RotationState {
     UP,
     RIGHT,
@@ -46,7 +47,9 @@ impl RotationState {
 }
 
 impl Window {
-    pub fn set_image(&self, name: &str, image: DynamicImage) -> Result<()> {
+    pub fn set_image(&self, image_pair: ImagePair) -> Result<()> {
+        let name = image_pair.path_str().to_string();
+        let image = image_pair.image().unwrap();
         self.window
             .set_image(name, image)
             .map_err(|_| anyhow!("Cannot apply the image"))

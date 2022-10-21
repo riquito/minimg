@@ -7,6 +7,23 @@ use std::sync::{Arc, RwLock};
 use std::time::Duration;
 use threadpool::ThreadPool;
 
+#[derive(Clone, PartialEq)]
+pub struct ImagePair(pub PathBuf, pub Option<DynamicImage>);
+
+impl ImagePair {
+    pub fn path_str(&self) -> std::borrow::Cow<str> {
+        self.0.to_string_lossy()
+    }
+
+    pub fn image_clone(&self) -> Option<DynamicImage> {
+        self.1.clone()
+    }
+
+    pub fn image(self) -> Option<DynamicImage> {
+        self.1
+    }
+}
+
 pub fn read_image(path: impl AsRef<Path>) -> std::io::Result<Vec<u8>> {
     let mut buffer = Vec::new();
     {
@@ -27,7 +44,7 @@ pub enum Direction {
     Exit,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum FileStatus<T, E = String> {
     Unread,
     Reading,
@@ -53,6 +70,15 @@ impl From<std::result::Result<DynamicImage, ImageError>> for FileStatus<DynamicI
     }
 }
 
+impl From<(PathBuf, std::result::Result<DynamicImage, ImageError>)> for FileStatus<ImagePair> {
+    fn from((p, res): (PathBuf, std::result::Result<DynamicImage, ImageError>)) -> Self {
+        match res {
+            Ok(x) => FileStatus::Read(ImagePair(p, Some(x))),
+            Err(x) => FileStatus::Err(x.to_string()),
+        }
+    }
+}
+
 impl<T, E> FileStatus<T, E> {
     pub const fn as_ref(&self) -> FileStatus<&T, &E> {
         match self {
@@ -65,16 +91,15 @@ impl<T, E> FileStatus<T, E> {
 }
 
 pub fn start_file_reader(
+    cache: Arc<RwLock<Vec<FileStatus<ImagePair>>>>,
     paths: Vec<PathBuf>,
     start_idx: usize,
     cache_side_max_length: usize,
     rx: std::sync::mpsc::Receiver<Direction>,
-    tx: std::sync::mpsc::Sender<Result<Option<DynamicImage>, String>>,
+    tx: std::sync::mpsc::Sender<Result<Option<usize>, String>>,
 ) {
     // TODO let's start by storing every loaded image, we'll later find a way
     // to drop some of them
-    let cache: Arc<RwLock<Vec<FileStatus<DynamicImage>>>> =
-        Arc::new(RwLock::new(vec![FileStatus::Unread; paths.len()]));
 
     let n_workers = 4;
     let pool = ThreadPool::new(n_workers);
@@ -86,7 +111,7 @@ pub fn start_file_reader(
         //let maybe_image_bytes = read_to_end(&paths[start_idx]);
         let maybe_image = image::open(&paths[start_idx]);
         let mut c = cache.write().unwrap();
-        c[start_idx] = FileStatus::from(maybe_image);
+        c[start_idx] = FileStatus::from((paths[start_idx].clone(), maybe_image));
     }
 
     let mut idx = start_idx;
@@ -99,6 +124,7 @@ pub fn start_file_reader(
             Direction::First => 0,
             Direction::Last => paths.len() - 1,
             Direction::Left | Direction::Right => {
+                debug!("equivalent to Stay");
                 tx.send(Ok(None)).unwrap();
                 continue;
             }
@@ -115,7 +141,7 @@ pub fn start_file_reader(
             );
             //let maybe_image_bytes = read_to_end(&paths[idx]);
             let maybe_image = image::open(&paths[start_idx]);
-            cache.write().unwrap()[idx] = FileStatus::from(maybe_image);
+            cache.write().unwrap()[idx] = FileStatus::from((paths[start_idx].clone(), maybe_image));
         } else {
             while cache.read().unwrap()[idx] == FileStatus::Reading {
                 std::thread::sleep(Duration::from_millis(20));
@@ -125,11 +151,11 @@ pub fn start_file_reader(
         {
             // now the file is either Read or Err
             let c = cache.read().unwrap();
-            if let FileStatus::Read(v) = &c[idx] {
+            if let FileStatus::Read(_) = &c[idx] {
                 debug!("I have the file, cloning");
-                let some_clone = v.clone();
+                // let some_clone = v.clone();
                 debug!("Cloned. Sending it back to main thread");
-                tx.send(Ok(Some(some_clone))).unwrap();
+                tx.send(Ok(Some(idx))).unwrap();
             } else if let FileStatus::Err(e) = &c[idx] {
                 tx.send(Err(e.to_string())).unwrap();
             } else {
@@ -143,16 +169,10 @@ pub fn start_file_reader(
         for some_idx in tmp_range {
             let c = cache.clone(); // Arc
 
-            debug!(
-                "should preload idx? {}: {}",
-                some_idx,
-                &paths[some_idx].to_string_lossy()
-            );
-
             if c.read().unwrap()[some_idx] == FileStatus::Unread {
                 let f_path = paths_ref[some_idx].clone();
 
-                debug!("YES! spawn thread for idx {}", some_idx);
+                debug!("preload img {:?}", f_path);
 
                 pool.execute(move || {
                     {
@@ -169,7 +189,7 @@ pub fn start_file_reader(
 
                     //let maybe_image_bytes = read_to_end(&f_path);
                     let maybe_image = image::open(&f_path);
-                    c.write().unwrap()[some_idx] = FileStatus::from(maybe_image);
+                    c.write().unwrap()[some_idx] = FileStatus::from((f_path.clone(), maybe_image));
                 });
             }
         }
