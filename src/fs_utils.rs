@@ -1,5 +1,5 @@
 use image::{DynamicImage, ImageError};
-use log::debug;
+use log::{debug, error};
 use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -41,7 +41,6 @@ pub enum Direction {
     Stay,
     First,
     Last,
-    Exit,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -95,8 +94,10 @@ pub fn start_file_reader(
     paths: Vec<PathBuf>,
     start_idx: usize,
     cache_side_max_length: usize,
-    rx: std::sync::mpsc::Receiver<Direction>,
+    rx: std::sync::mpsc::Receiver<Option<usize>>,
     tx: std::sync::mpsc::Sender<Result<Option<usize>, String>>,
+    //wakeup: impl Fn() -> (),
+    w: show_image::WindowProxy,
 ) {
     // TODO let's start by storing every loaded image, we'll later find a way
     // to drop some of them
@@ -114,22 +115,40 @@ pub fn start_file_reader(
         c[start_idx] = FileStatus::from((paths[start_idx].clone(), maybe_image));
     }
 
-    let mut idx = start_idx;
+    let mut idx: usize;
 
-    loop {
-        idx = match rx.recv().unwrap() {
-            Direction::Stay => idx,
-            Direction::Left if idx > 0 => idx - 1,
-            Direction::Right if idx < paths.len() - 1 => idx + 1,
-            Direction::First => 0,
-            Direction::Last => paths.len() - 1,
-            Direction::Left | Direction::Right => {
-                debug!("equivalent to Stay");
-                tx.send(Ok(None)).unwrap();
-                continue;
+    'outer: loop {
+        // Get latest idx (if there's more than one in the queue, we keel the last one)
+        // so we only return the latest image requested).
+
+        // Start with a blocking recv not not starve the CPU.
+        match rx.recv() {
+            Ok(Some(next_idx)) => {
+                idx = next_idx;
             }
-            Direction::Exit => break,
-        };
+            Ok(None) => {
+                break 'outer;
+            }
+            Err(e) => {
+                error!("Failed to read what image (idx) to load. Error was: {}", e);
+                break 'outer;
+            }
+        }
+        // Once we got an idx, we then verify that it's the latest one that was sent.
+        loop {
+            match rx.try_recv() {
+                Ok(Some(next_idx)) => {
+                    idx = next_idx;
+                }
+                Ok(None) => {
+                    break 'outer;
+                }
+                Err(_) => {
+                    // nothing in the channel. We already have an idx, let's move on.
+                    break;
+                }
+            }
+        }
 
         debug!("Got a request to load idx {}", idx);
 
@@ -139,9 +158,8 @@ pub fn start_file_reader(
                 idx,
                 &paths[idx].to_string_lossy()
             );
-            //let maybe_image_bytes = read_to_end(&paths[idx]);
-            let maybe_image = image::open(&paths[start_idx]);
-            cache.write().unwrap()[idx] = FileStatus::from((paths[start_idx].clone(), maybe_image));
+            let maybe_image = image::open(&paths[idx]);
+            cache.write().unwrap()[idx] = FileStatus::from((paths[idx].clone(), maybe_image));
         } else {
             while cache.read().unwrap()[idx] == FileStatus::Reading {
                 std::thread::sleep(Duration::from_millis(20));
@@ -151,11 +169,12 @@ pub fn start_file_reader(
         {
             // now the file is either Read or Err
             let c = cache.read().unwrap();
-            if let FileStatus::Read(_) = &c[idx] {
-                debug!("I have the file, cloning");
-                // let some_clone = v.clone();
-                debug!("Cloned. Sending it back to main thread");
+            if let FileStatus::Read(k) = &c[idx] {
+                debug!("Image loaded and cached. Sending the idx back to main thread");
                 tx.send(Ok(Some(idx))).unwrap();
+
+                w.set_image("", k.image_clone().unwrap()).unwrap();
+                // wakeup()
             } else if let FileStatus::Err(e) = &c[idx] {
                 tx.send(Err(e.to_string())).unwrap();
             } else {

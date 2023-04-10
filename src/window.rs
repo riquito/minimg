@@ -4,7 +4,7 @@ use show_image::glam;
 use crate::fs_utils::ImagePair;
 
 pub struct Window {
-    window: show_image::WindowProxy,
+    pub window: show_image::WindowProxy,
 }
 
 pub enum Rotation {
