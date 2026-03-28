@@ -52,7 +52,9 @@ impl Window {
         let image = image_pair.image().unwrap();
         self.window
             .set_image(name, image)
-            .map_err(|_| anyhow!("Cannot apply the image"))
+            .map_err(|_| anyhow!("Cannot apply the image"))?;
+        self.reset_pan();
+        Ok(())
     }
 
     pub fn event_channel(
@@ -62,6 +64,23 @@ impl Window {
         show_image::error::InvalidWindowId,
     > {
         self.window.event_channel()
+    }
+
+    pub fn reset_pan(&self) {
+        self.window
+            .run_function_wait(|mut window_handle| {
+                let scale = window_handle.transform().x_axis.length();
+                // Keep scale, position at top-left: x centered, y at top
+                let tx = (1.0 - scale) / 2.0;
+                let ty = 0.0;
+                let transform = glam::Affine2::from_scale_angle_translation(
+                    glam::Vec2::splat(scale),
+                    0.0,
+                    glam::Vec2::new(tx, ty),
+                );
+                window_handle.set_transform(transform);
+            })
+            .expect("Failed to reset pan");
     }
 
     pub fn reset_image(&self) {
