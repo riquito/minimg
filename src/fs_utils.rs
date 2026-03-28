@@ -72,10 +72,26 @@ impl From<std::result::Result<DynamicImage, ImageError>> for FileStatus<DynamicI
 impl From<(PathBuf, std::result::Result<DynamicImage, ImageError>)> for FileStatus<ImagePair> {
     fn from((p, res): (PathBuf, std::result::Result<DynamicImage, ImageError>)) -> Self {
         match res {
-            Ok(x) => FileStatus::Read(ImagePair(p, Some(x))),
+            Ok(x) => FileStatus::Read(ImagePair(p, Some(clamp_image_size(x)))),
             Err(x) => FileStatus::Err(x.to_string()),
         }
     }
+}
+
+/// Downscale an image if its raw buffer would exceed the wgpu max_storage_buffer_binding_size (128 MiB).
+fn clamp_image_size(img: DynamicImage) -> DynamicImage {
+    // wgpu max_storage_buffer_binding_size is 128 MiB. Each pixel is at most 4 bytes (RGBA8).
+    const MAX_PIXELS: u32 = 134_217_728 / 4;
+    let (w, h) = (img.width(), img.height());
+    let pixels = w as u64 * h as u64;
+    if pixels <= MAX_PIXELS as u64 {
+        return img;
+    }
+    let scale = ((MAX_PIXELS as f64) / (pixels as f64)).sqrt();
+    let new_w = (w as f64 * scale) as u32;
+    let new_h = (h as f64 * scale) as u32;
+    eprintln!("Image {}x{} too large for GPU, downscaling to {}x{}", w, h, new_w, new_h);
+    img.resize(new_w, new_h, image::imageops::FilterType::Lanczos3)
 }
 
 impl<T, E> FileStatus<T, E> {
