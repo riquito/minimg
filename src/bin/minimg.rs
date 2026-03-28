@@ -157,46 +157,44 @@ fn main() -> Result<()> {
 
         if let event::WindowEvent::KeyboardInput(event) = event {
             if !event.is_synthetic && event.input.state.is_pressed() {
-                debug!("Keyboard event {:?}", event.input.key_code);
-                match event.input.key_code {
-                    Some(event::VirtualKeyCode::Escape) | Some(event::VirtualKeyCode::Q) => break,
-                    Some(event::VirtualKeyCode::Right)
-                    | Some(event::VirtualKeyCode::L)
-                    | Some(event::VirtualKeyCode::N)
-                    | Some(event::VirtualKeyCode::Space) => {
+                use event::{Key, NamedKey};
+                let key = &event.input.logical_key;
+                let ctrl = event.modifiers.contains(event::ModifiersState::CONTROL);
+                debug!("Keyboard event {:?}", key);
+                match key {
+                    Key::Named(NamedKey::Escape) => break,
+                    Key::Character(c) if c == "q" => break,
+                    Key::Named(NamedKey::ArrowRight | NamedKey::Space) => {
                         idx = get_next_idx(idx, num_images, Direction::Right);
                     }
-                    Some(event::VirtualKeyCode::Left)
-                    | Some(event::VirtualKeyCode::H)
-                    | Some(event::VirtualKeyCode::P)
-                    | Some(event::VirtualKeyCode::Back) => {
+                    Key::Character(c) if c == "l" || c == "n" => {
+                        idx = get_next_idx(idx, num_images, Direction::Right);
+                    }
+                    Key::Named(NamedKey::ArrowLeft | NamedKey::Backspace) => {
                         idx = get_next_idx(idx, num_images, Direction::Left);
                     }
-                    Some(event::VirtualKeyCode::Home) => {
+                    Key::Character(c) if c == "h" || c == "p" => {
+                        idx = get_next_idx(idx, num_images, Direction::Left);
+                    }
+                    Key::Named(NamedKey::Home) => {
                         idx = get_next_idx(idx, num_images, Direction::First);
                     }
-                    Some(event::VirtualKeyCode::End) => {
+                    Key::Named(NamedKey::End) => {
                         idx = get_next_idx(idx, num_images, Direction::Last);
                     }
-                    Some(event::VirtualKeyCode::Key0) => {
+                    Key::Character(c) if c == "0" => {
                         window.reset_image();
                     }
-                    Some(event::VirtualKeyCode::Minus)
-                        if event.input.modifiers == event::ModifiersState::CTRL =>
-                    {
+                    Key::Character(c) if c == "-" && ctrl => {
                         window.scale_down();
                     }
-                    Some(event::VirtualKeyCode::Equals)
-                        if event.input.modifiers == event::ModifiersState::CTRL =>
-                    {
+                    Key::Character(c) if c == "=" && ctrl => {
                         window.scale_up();
                     }
-                    Some(event::VirtualKeyCode::R)
-                        if event.input.modifiers == event::ModifiersState::SHIFT =>
-                    {
+                    Key::Character(c) if c == "R" => {
                         window.rotate(Rotation::Left);
                     }
-                    Some(event::VirtualKeyCode::R) => {
+                    Key::Character(c) if c == "r" => {
                         window.rotate(Rotation::Right);
                     }
                     _ => (),

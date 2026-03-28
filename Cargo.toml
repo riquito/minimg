@@ -14,6 +14,6 @@ futures-util = "0.3.24"
 image = "0.25"
 log = "0.4.17"
 pollster = "0.2.5"
-show-image = { version = "0.14.1", features = ["image", "png"] }
+show-image = { path = "../show-image-rs", features = ["image", "png"] }
 threadpool = "1.8.1"
 tokio = { version = "1.21.0", features = ["fs", "io-util", "rt"] }
