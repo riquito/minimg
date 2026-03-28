@@ -200,7 +200,7 @@ pub fn start_file_reader(
 
         let paths_ref = &paths;
         let tmp_range = suggested_items_to_cache(idx, paths.len(), cache_side_max_length);
-        dbg!(&tmp_range);
+
         for some_idx in tmp_range {
             let c = cache.clone(); // Arc
 
