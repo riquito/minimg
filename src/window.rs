@@ -193,6 +193,43 @@ impl Window {
             .expect("XXX TODO rotate failed");
     }
 
+    pub fn pan(&self, dx: f32, dy: f32) {
+        self.window
+            .run_function_wait(move |mut window_handle| {
+                let eff = window_handle.effective_transform();
+                let (min_x, max_x, min_y, max_y) = image_bounds(&eff);
+
+                let extent_x = max_x - min_x;
+                let extent_y = max_y - min_y;
+                let eps = 0.001;
+
+                // Only allow panning on axes where the image extends beyond
+                // the viewport, and only in the direction where there's room.
+                let actual_dx = if extent_x > 1.0 + eps {
+                    if dx > 0.0 && min_x < -eps { dx }
+                    else if dx < 0.0 && max_x > 1.0 + eps { dx }
+                    else { 0.0 }
+                } else {
+                    0.0
+                };
+                let actual_dy = if extent_y > 1.0 + eps {
+                    if dy > 0.0 && min_y < -eps { dy }
+                    else if dy < 0.0 && max_y > 1.0 + eps { dy }
+                    else { 0.0 }
+                } else {
+                    0.0
+                };
+
+                if actual_dx != 0.0 || actual_dy != 0.0 {
+                    let shift = glam::Affine2::from_translation(
+                        glam::Vec2::new(actual_dx, actual_dy),
+                    );
+                    window_handle.pre_apply_transform(shift);
+                }
+            })
+            .expect("Failed to pan");
+    }
+
     pub fn toggle_fullscreen(&self) {
         self.window
             .run_function_wait(|mut window_handle| {
@@ -237,4 +274,18 @@ fn fit(window_size: glam::Vec2, image_size: glam::Vec2) -> (glam::Affine2, glam:
     );
 
     (transform, image_size)
+}
+
+fn image_bounds(eff: &glam::Affine2) -> (f32, f32, f32, f32) {
+    let corners = [
+        eff.transform_point2(glam::Vec2::new(0.0, 0.0)),
+        eff.transform_point2(glam::Vec2::new(1.0, 0.0)),
+        eff.transform_point2(glam::Vec2::new(0.0, 1.0)),
+        eff.transform_point2(glam::Vec2::new(1.0, 1.0)),
+    ];
+    let min_x = corners.iter().map(|p| p.x).fold(f32::INFINITY, f32::min);
+    let max_x = corners.iter().map(|p| p.x).fold(f32::NEG_INFINITY, f32::max);
+    let min_y = corners.iter().map(|p| p.y).fold(f32::INFINITY, f32::min);
+    let max_y = corners.iter().map(|p| p.y).fold(f32::NEG_INFINITY, f32::max);
+    (min_x, max_x, min_y, max_y)
 }

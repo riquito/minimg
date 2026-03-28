@@ -164,13 +164,25 @@ fn main() -> Result<()> {
                 match key {
                     Key::Named(NamedKey::Escape) => break,
                     Key::Character(c) if c == "q" => break,
-                    Key::Named(NamedKey::ArrowRight | NamedKey::Space) => {
+                    Key::Named(NamedKey::ArrowUp) => {
+                        window.pan(0.0, 0.05);
+                    }
+                    Key::Named(NamedKey::ArrowDown) => {
+                        window.pan(0.0, -0.05);
+                    }
+                    Key::Named(NamedKey::ArrowRight) => {
+                        window.pan(-0.05, 0.0);
+                    }
+                    Key::Named(NamedKey::ArrowLeft) => {
+                        window.pan(0.05, 0.0);
+                    }
+                    Key::Named(NamedKey::Space) => {
                         idx = get_next_idx(idx, num_images, Direction::Right);
                     }
                     Key::Character(c) if c == "l" || c == "n" => {
                         idx = get_next_idx(idx, num_images, Direction::Right);
                     }
-                    Key::Named(NamedKey::ArrowLeft | NamedKey::Backspace) => {
+                    Key::Named(NamedKey::Backspace) => {
                         idx = get_next_idx(idx, num_images, Direction::Left);
                     }
                     Key::Character(c) if c == "h" || c == "p" || c == "N" => {
