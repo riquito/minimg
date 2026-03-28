@@ -48,11 +48,25 @@ impl RotationState {
 
 impl Window {
     pub fn set_image(&self, image_pair: ImagePair) -> Result<()> {
+        let path = image_pair.0.clone();
         let name = image_pair.path_str().to_string();
         let image = image_pair.image().unwrap();
         self.window
             .set_image(name, image)
             .map_err(|_| anyhow!("Cannot apply the image"))?;
+
+        let title = std::env::current_dir()
+            .ok()
+            .and_then(|cwd| path.strip_prefix(&cwd).ok().map(|p| p.to_owned()))
+            .unwrap_or(path)
+            .to_string_lossy()
+            .into_owned();
+        self.window
+            .run_function_wait(move |window_handle| {
+                window_handle.set_title(&title);
+            })
+            .map_err(|_| anyhow!("Cannot set window title"))?;
+
         self.reset_pan();
         Ok(())
     }
