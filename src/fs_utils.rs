@@ -11,7 +11,7 @@ use threadpool::ThreadPool;
 pub struct ImagePair(pub PathBuf, pub Option<DynamicImage>);
 
 impl ImagePair {
-    pub fn path_str(&self) -> std::borrow::Cow<str> {
+    pub fn path_str(&self) -> std::borrow::Cow<'_, str> {
         self.0.to_string_lossy()
     }
 
