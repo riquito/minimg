@@ -205,10 +205,10 @@ fn main() -> Result<()> {
                     Key::Character(c) if c == "0" => {
                         window.reset_image();
                     }
-                    Key::Character(c) if c == "-" && ctrl => {
+                    Key::Character(c) if c == "-" => {
                         window.scale_down();
                     }
-                    Key::Character(c) if c == "=" && ctrl => {
+                    Key::Character(c) if c == "=" => {
                         window.scale_up();
                     }
                     Key::Character(c) if c == "R" => {
