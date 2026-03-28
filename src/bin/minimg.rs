@@ -176,6 +176,9 @@ fn main() -> Result<()> {
                     Key::Named(NamedKey::ArrowLeft) => {
                         window.pan(0.05, 0.0);
                     }
+                    Key::Named(NamedKey::Space) if event.modifiers.contains(event::ModifiersState::SHIFT) => {
+                        idx = get_next_idx(idx, num_images, Direction::Left);
+                    }
                     Key::Named(NamedKey::Space) => {
                         idx = get_next_idx(idx, num_images, Direction::Right);
                     }
