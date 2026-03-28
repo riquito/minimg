@@ -173,7 +173,7 @@ fn main() -> Result<()> {
                     Key::Named(NamedKey::ArrowLeft | NamedKey::Backspace) => {
                         idx = get_next_idx(idx, num_images, Direction::Left);
                     }
-                    Key::Character(c) if c == "h" || c == "p" => {
+                    Key::Character(c) if c == "h" || c == "p" || c == "N" => {
                         idx = get_next_idx(idx, num_images, Direction::Left);
                     }
                     Key::Named(NamedKey::Home) => {
