@@ -197,6 +197,9 @@ fn main() -> Result<()> {
                     Key::Character(c) if c == "r" => {
                         window.rotate(Rotation::Right);
                     }
+                    Key::Character(c) if c == "f" => {
+                        window.toggle_fullscreen();
+                    }
                     _ => (),
                 }
             }

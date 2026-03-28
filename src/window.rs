@@ -193,6 +193,15 @@ impl Window {
             .expect("XXX TODO rotate failed");
     }
 
+    pub fn toggle_fullscreen(&self) {
+        self.window
+            .run_function_wait(|mut window_handle| {
+                let is_fullscreen = window_handle.is_fullscreen();
+                window_handle.set_fullscreen(!is_fullscreen);
+            })
+            .expect("Failed to toggle fullscreen");
+    }
+
     pub fn exit(&self) {}
 }
 
