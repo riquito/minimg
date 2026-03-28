@@ -128,9 +128,11 @@ fn main() -> Result<()> {
     tx_img_idx_to_load
         .send(Some(0))
         .expect("Failed to send image request to internal thread");
+    let mut current_path;
     loop {
         if let Some(image_pair) = try_get_next_image()? {
             debug!("Display initial image");
+            current_path = image_pair.path_str().to_string();
             window.set_image(image_pair)?;
             break;
         }
@@ -151,7 +153,8 @@ fn main() -> Result<()> {
         }
 
         if let Some(image_pair) = try_get_next_image()? {
-            debug!("Display image {:?}", image_pair.path_str().to_string());
+            current_path = image_pair.path_str().to_string();
+            debug!("Display image {:?}", current_path);
             window.set_image(image_pair)?;
         }
 
@@ -214,6 +217,9 @@ fn main() -> Result<()> {
                     }
                     Key::Character(c) if c == "f" => {
                         window.toggle_fullscreen();
+                    }
+                    Key::Character(c) if c == "c" => {
+                        println!("{}", current_path);
                     }
                     _ => (),
                 }
