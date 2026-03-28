@@ -82,6 +82,8 @@ fn main() -> Result<()> {
         }
     }
 
+    paths.sort();
+
     if paths.is_empty() {
         return Err(anyhow!("Could not find any image"));
     }
