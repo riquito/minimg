@@ -181,10 +181,12 @@ fn main() -> Result<()> {
                     Key::Named(NamedKey::ArrowLeft) => {
                         window.pan(0.05, 0.0);
                     }
-                    Key::Named(NamedKey::Space) if event.modifiers.contains(event::ModifiersState::SHIFT) => {
+                    Key::Character(ref c)
+                        if c == " " && event.modifiers.contains(event::ModifiersState::SHIFT) =>
+                    {
                         idx = get_next_idx(idx, num_images, Direction::Left);
                     }
-                    Key::Named(NamedKey::Space) => {
+                    Key::Character(ref c) if c == " " => {
                         idx = get_next_idx(idx, num_images, Direction::Right);
                     }
                     Key::Character(c) if c == "l" || c == "n" => {

@@ -90,7 +90,10 @@ fn clamp_image_size(img: DynamicImage) -> DynamicImage {
     let scale = ((MAX_PIXELS as f64) / (pixels as f64)).sqrt();
     let new_w = (w as f64 * scale) as u32;
     let new_h = (h as f64 * scale) as u32;
-    eprintln!("Image {}x{} too large for GPU, downscaling to {}x{}", w, h, new_w, new_h);
+    eprintln!(
+        "Image {}x{} too large for GPU, downscaling to {}x{}",
+        w, h, new_w, new_h
+    );
     img.resize(new_w, new_h, image::imageops::FilterType::Lanczos3)
 }
 
