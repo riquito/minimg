@@ -2115,6 +2115,7 @@ checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
 [[package]]
 name = "show-image"
 version = "0.14.1"
+source = "git+https://github.com/riquito/show-image-rs?branch=upgrade-winit-0.31#2146fd2f25d5449d2c4e39b2ba06d27622802147"
 dependencies = [
  "futures",
  "glam",
@@ -2130,6 +2131,7 @@ dependencies = [
 [[package]]
 name = "show-image-macros"
 version = "0.12.4"
+source = "git+https://github.com/riquito/show-image-rs?branch=upgrade-winit-0.31#2146fd2f25d5449d2c4e39b2ba06d27622802147"
 dependencies = [
  "proc-macro2",
  "quote",
