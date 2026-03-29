@@ -37,12 +37,15 @@ Working on Fedora 39, AMD Radeon 780M, GNOME Wayland.
 
 ### What Doesn't Work
 
-- **Pinch-to-zoom** - winit 0.30.9 does not bind the Wayland
+- **Pinch-to-zoom** - winit 0.30.x does not bind the Wayland
   `zwp_pointer_gestures_v1` protocol. The `PinchGesture` event exists in
   winit's API but is only functional on macOS/iOS. GNOME itself supports the
   protocol (Firefox, Nautilus, etc. use it via GTK), but winit doesn't request
   it during seat initialization, so the compositor never sends gesture events.
-  This is a known upstream limitation; future winit versions may add support.
+  **Fix available:** [winit PR #4338](https://github.com/rust-windowing/winit/pull/4338)
+  adds Wayland gesture support and was merged Sep 2025. It's included in
+  winit 0.31.0-beta.1+ but not in any 0.30.x release. Upgrading show-image-rs
+  to winit 0.31 would enable pinch-to-zoom.
 
 ### Keybindings
 
