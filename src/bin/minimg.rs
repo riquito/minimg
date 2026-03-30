@@ -57,8 +57,35 @@ fn main() -> Result<()> {
         .init();
 
     let args: Vec<_> = std::env::args().collect();
-    if args.len() < 2 {
-        return Err(anyhow!("usage: {} [IMAGE or DIR]...", args[0]));
+    if args.len() < 2 || args.iter().any(|a| a == "-h" || a == "--help") {
+        let bin = &args[0];
+        eprintln!(
+            "\
+Usage: {bin} [IMAGE or DIR]...
+
+A minimal image viewer.
+
+NAVIGATION
+  Space / l / n          Next image
+  Shift+Space / h / p / N / Backspace  Previous image
+  Home                   First image
+  End                    Last image
+
+VIEW
+  Arrow keys             Pan
+  = / scroll up          Zoom in
+  - / scroll down        Zoom out
+  Pinch                  Zoom (trackpad)
+  r                      Rotate right
+  R                      Rotate left
+  0                      Reset view
+  f                      Toggle fullscreen
+
+OTHER
+  c                      Print current file path to stdout
+  q / Escape             Quit"
+        );
+        std::process::exit(if args.len() < 2 { 1 } else { 0 });
     }
 
     let mut paths = Vec::new();
