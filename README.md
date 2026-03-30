@@ -56,6 +56,14 @@ Pass one or more image files or directories. Directories are scanned for support
 cargo build --release
 ```
 
+## Installation
+
+To make `minimg` available system-wide, symlink the binary into a directory on your `PATH`:
+
+```
+ln -sf "$(pwd)/target/release/minimg" ~/.local/bin/minimg
+```
+
 ## License
 
 [GNU General Public License v3.0 or later](https://www.gnu.org/licenses/gpl-3.0-standalone.html)
