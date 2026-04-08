@@ -195,7 +195,6 @@ OTHER
             if !event.is_synthetic && event.input.state.is_pressed() {
                 use event::{Key, NamedKey};
                 let key = &event.input.logical_key;
-                let ctrl = event.modifiers.contains(event::ModifiersState::CONTROL);
                 debug!("Keyboard event {:?}", key);
                 match key {
                     Key::Named(NamedKey::Escape) => break,
