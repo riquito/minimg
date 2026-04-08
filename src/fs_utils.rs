@@ -47,6 +47,7 @@ pub enum Direction {
 pub enum FileStatus<T, E = String> {
     Unread,
     Reading,
+    Thumbnail(T),
     Read(T),
     Err(E),
 }
@@ -78,6 +79,16 @@ impl From<(PathBuf, std::result::Result<DynamicImage, ImageError>)> for FileStat
     }
 }
 
+/// Generate a small thumbnail for fast preview display.
+/// Returns None if the image is already small enough to serve as its own thumbnail.
+fn generate_thumbnail(img: &DynamicImage, max_dim: u32) -> Option<DynamicImage> {
+    let (w, h) = (img.width(), img.height());
+    if w <= max_dim && h <= max_dim {
+        return None;
+    }
+    Some(img.thumbnail(max_dim, max_dim))
+}
+
 /// Downscale an image if its raw buffer would exceed the wgpu max_storage_buffer_binding_size (128 MiB).
 fn clamp_image_size(img: DynamicImage) -> DynamicImage {
     // wgpu max_storage_buffer_binding_size is 128 MiB. Each pixel is at most 4 bytes (RGBA8).
@@ -101,6 +112,7 @@ impl<T, E> FileStatus<T, E> {
     pub const fn as_ref(&self) -> FileStatus<&T, &E> {
         match self {
             FileStatus::Read(x) => FileStatus::Read(x),
+            FileStatus::Thumbnail(x) => FileStatus::Thumbnail(x),
             FileStatus::Unread => FileStatus::Unread,
             FileStatus::Reading => FileStatus::Reading,
             FileStatus::Err(x) => FileStatus::Err(x),
@@ -128,87 +140,152 @@ pub fn start_file_reader(
 
     // immediately load the first image
     {
-        //let maybe_image_bytes = read_to_end(&paths[start_idx]);
         let maybe_image = image::open(&paths[start_idx]);
         let mut c = cache.write().unwrap();
         c[start_idx] = FileStatus::from((paths[start_idx].clone(), maybe_image));
     }
 
     let mut idx: usize;
+    let mut pending_idx: Option<usize> = None;
 
     'outer: loop {
-        // Get latest idx (if there's more than one in the queue, we keel the last one)
-        // so we only return the latest image requested).
-
-        // Start with a blocking recv not not starve the CPU.
-        match rx.recv() {
-            Ok(Some(next_idx)) => {
-                idx = next_idx;
-            }
-            Ok(None) => {
-                break 'outer;
-            }
-            Err(e) => {
-                error!("Failed to read what image (idx) to load. Error was: {}", e);
-                break 'outer;
-            }
-        }
-        // Once we got an idx, we then verify that it's the latest one that was sent.
-        loop {
-            match rx.try_recv() {
-                Ok(Some(next_idx)) => {
-                    idx = next_idx;
-                }
-                Ok(None) => {
+        // Get latest idx. Use pending_idx if we have one from a previous
+        // iteration (user moved on while we were showing a thumbnail).
+        if let Some(pending) = pending_idx.take() {
+            idx = pending;
+        } else {
+            // Blocking recv to not starve the CPU.
+            match rx.recv() {
+                Ok(Some(next_idx)) => idx = next_idx,
+                Ok(None) => break 'outer,
+                Err(e) => {
+                    error!("Failed to read what image (idx) to load. Error was: {}", e);
                     break 'outer;
                 }
-                Err(_) => {
-                    // nothing in the channel. We already have an idx, let's move on.
-                    break;
-                }
+            }
+        }
+        // Drain channel to keep only the most recent request.
+        loop {
+            match rx.try_recv() {
+                Ok(Some(next_idx)) => idx = next_idx,
+                Ok(None) => break 'outer,
+                Err(_) => break,
             }
         }
 
         debug!("Got a request to load idx {}", idx);
 
-        if cache.read().unwrap()[idx] == FileStatus::Unread {
+        // Helper: decode an image, store thumbnail first, then full quality.
+        // Returns the decoded image for display.
+        let display_image = |idx: usize, cache: &Arc<RwLock<Vec<FileStatus<ImagePair>>>>| {
+            let status = cache.read().unwrap()[idx].clone();
+            match status {
+                FileStatus::Read(ref k) | FileStatus::Thumbnail(ref k) => {
+                    Some(k.image_clone().unwrap())
+                }
+                FileStatus::Err(_) => None,
+                FileStatus::Reading => {
+                    // Wait for pool to finish
+                    loop {
+                        let s = cache.read().unwrap()[idx].clone();
+                        match s {
+                            FileStatus::Reading => {
+                                std::thread::sleep(Duration::from_millis(10));
+                            }
+                            FileStatus::Read(k) | FileStatus::Thumbnail(k) => {
+                                return Some(k.image_clone().unwrap());
+                            }
+                            _ => return None,
+                        }
+                    }
+                }
+                FileStatus::Unread => None,
+            }
+        };
+
+        // Try to display from cache first
+        if let Some(img) = display_image(idx, &cache) {
+            let _ = w.set_image("", img);
+            tx.send(Ok(Some(idx))).unwrap();
+        } else {
+            // Not cached at all — decode now
             debug!(
-                "FILE NOT FOUND, load it now {}: {}",
+                "Image not cached, loading {}: {}",
                 idx,
                 &paths[idx].to_string_lossy()
             );
-            let maybe_image = image::open(&paths[idx]);
-            cache.write().unwrap()[idx] = FileStatus::from((paths[idx].clone(), maybe_image));
-        } else {
-            while cache.read().unwrap()[idx] == FileStatus::Reading {
-                std::thread::sleep(Duration::from_millis(20));
+            cache.write().unwrap()[idx] = FileStatus::Reading;
+            match image::open(&paths[idx]) {
+                Ok(img) => {
+                    // For large images, show a fast thumbnail first
+                    const THUMB_MAX: u32 = 512;
+                    if let Some(thumb) = generate_thumbnail(&img, THUMB_MAX) {
+                        cache.write().unwrap()[idx] = FileStatus::Thumbnail(ImagePair(
+                            paths[idx].clone(),
+                            Some(thumb.clone()),
+                        ));
+                        let _ = w.set_image("", thumb);
+                        tx.send(Ok(Some(idx))).unwrap();
+
+                        // Before the expensive Lanczos3 clamp, check if user moved on
+                        if let Ok(msg) = rx.try_recv() {
+                            // Offload full-quality processing to pool
+                            let c = cache.clone();
+                            let p = paths[idx].clone();
+                            let captured_idx = idx;
+                            pool.execute(move || {
+                                let clamped = clamp_image_size(img);
+                                c.write().unwrap()[captured_idx] =
+                                    FileStatus::Read(ImagePair(p, Some(clamped)));
+                            });
+
+                            match msg {
+                                Some(next_idx) => {
+                                    pending_idx = Some(next_idx);
+                                    continue 'outer;
+                                }
+                                None => break 'outer,
+                            }
+                        }
+                    }
+
+                    // Small image or user stayed — do full clamp and display
+                    let clamped = clamp_image_size(img);
+                    cache.write().unwrap()[idx] =
+                        FileStatus::Read(ImagePair(paths[idx].clone(), Some(clamped.clone())));
+                    let _ = w.set_image("", clamped);
+                    tx.send(Ok(Some(idx))).unwrap();
+                }
+                Err(e) => {
+                    cache.write().unwrap()[idx] = FileStatus::Err(e.to_string());
+                    tx.send(Err(e.to_string())).unwrap();
+                }
             }
         }
 
-        {
-            // now the file is either Read or Err
-            let c = cache.read().unwrap();
-            if let FileStatus::Read(k) = &c[idx] {
-                debug!("Image loaded and cached. Sending the idx back to main thread");
-                tx.send(Ok(Some(idx))).unwrap();
-
-                w.set_image("", k.image_clone().unwrap()).unwrap();
-                // wakeup()
-            } else if let FileStatus::Err(e) = &c[idx] {
-                tx.send(Err(e.to_string())).unwrap();
-            } else {
-                panic!("Invariant error. File not loaded");
+        // If the displayed image was only a thumbnail, upgrade to full quality
+        if matches!(cache.read().unwrap()[idx], FileStatus::Thumbnail(_)) {
+            match image::open(&paths[idx]) {
+                Ok(img) => {
+                    let clamped = clamp_image_size(img);
+                    cache.write().unwrap()[idx] =
+                        FileStatus::Read(ImagePair(paths[idx].clone(), Some(clamped.clone())));
+                    let _ = w.set_image("", clamped);
+                    tx.send(Ok(Some(idx))).unwrap();
+                }
+                Err(e) => {
+                    cache.write().unwrap()[idx] = FileStatus::Err(e.to_string());
+                }
             }
         }
 
-        let paths_ref = &paths;
         let tmp_range = suggested_items_to_cache(idx, paths.len(), cache_side_max_length);
 
         for some_idx in tmp_range {
-            let c = cache.clone(); // Arc
+            let c = cache.clone();
 
             if c.read().unwrap()[some_idx] == FileStatus::Unread {
-                let f_path = paths_ref[some_idx].clone();
+                let f_path = paths[some_idx].clone();
 
                 debug!("preload img {:?}", f_path);
 
@@ -217,7 +294,6 @@ pub fn start_file_reader(
                         let mut rw_lock = c.write().unwrap();
                         let c_rw = &mut rw_lock[some_idx];
 
-                        // After the RW lock, is it still unread or are we too late?
                         if *c_rw != FileStatus::Unread {
                             return;
                         }
@@ -225,7 +301,6 @@ pub fn start_file_reader(
                         *c_rw = FileStatus::Reading;
                     }
 
-                    //let maybe_image_bytes = read_to_end(&f_path);
                     let maybe_image = image::open(&f_path);
                     c.write().unwrap()[some_idx] = FileStatus::from((f_path.clone(), maybe_image));
                 });

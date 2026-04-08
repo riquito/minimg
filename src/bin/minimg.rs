@@ -31,10 +31,14 @@ fn try_get_image(
             if let Ok(Some(idx)) = maybe_img {
                 debug!("Load image_pair from cache at idx {:?}", idx);
 
-                if let Some(FileStatus::Read(image_pair)) = cache.read().unwrap().get(idx) {
-                    debug!("Got imagPair");
-                    return Ok(Some(image_pair.clone()));
-                } // XXX else???
+                match cache.read().unwrap().get(idx) {
+                    Some(FileStatus::Read(image_pair))
+                    | Some(FileStatus::Thumbnail(image_pair)) => {
+                        debug!("Got imagPair");
+                        return Ok(Some(image_pair.clone()));
+                    }
+                    _ => {}
+                }
             }
         }
         Err(TryRecvError::Empty) => {
