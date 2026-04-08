@@ -62,8 +62,11 @@ impl Window {
             .to_string_lossy()
             .into_owned();
         self.window
-            .run_function_wait(move |window_handle| {
+            .run_function_wait(move |mut window_handle| {
                 window_handle.set_title(&title);
+                // Reset state that may have been changed by rotation
+                window_handle.set_preserve_aspect_ratio(true);
+                window_handle.set_transform(glam::Affine2::IDENTITY);
             })
             .map_err(|_| anyhow!("Cannot set window title"))?;
 
